@@ -1,6 +1,7 @@
 package pl.coderslab.controller;
 
 
+import com.mysql.jdbc.exceptions.jdbc4.MySQLIntegrityConstraintViolationException;
 import pl.coderslab.model.Book;
 import pl.coderslab.utils.DbUtil;
 import pl.coderslab.utils.LogUtil;
@@ -20,9 +21,10 @@ public class MemoryBookService {
     private static Logger logger;
     private static Connection connection;
 
+    private static final String CREATE_BOOK = "INSERT INTO books(isbn,title,author,publisher,type) VALUES (?,?,?,?,?);";
     private static final String READ_ALL_BOOKS = "SELECT * FROM books ;";
     private static final String READ_BOOK_BY_ID = "SELECT * FROM books WHERE id = ? ;";
-    private static final String EDIT_BOOK = "UPDATE books SET";
+    private static final String UPDATE_BOOK = "UPDATE books SET isbn = ?, title = ?, author = ?, publisher = ?, type = ? WHERE id = ?";
     private static final String DELETE_BOOK = "DELETE FROM books WHERE id=? ;";
 
 
@@ -30,16 +32,24 @@ public class MemoryBookService {
 
     }
 
-    public static MemoryBookService getMemoryBookService() throws IOException, SQLException {
-        if (instance == null) {
-            synchronized (MemoryBookService.class) {
-                if (instance == null) {
-                    instance = new MemoryBookService();
-                    connection = DbUtil.getConnection();
-                    logger = LogUtil.getLogger();
-                    logger.info("Created instance of MemoryBookService");
+    public static MemoryBookService getMemoryBookService(){
+        try {
+            if (instance == null) {
+                synchronized (MemoryBookService.class) {
+                    if (instance == null) {
+                        instance = new MemoryBookService();
+                        connection = DbUtil.getConnection();
+                        logger = LogUtil.getLogger();
+                        logger.info("Created instance of MemoryBookService");
+                    }
                 }
             }
+        }catch (IOException e){
+            e.printStackTrace();
+            logger.severe("IO Exception while creating instance of MemoryBookService");
+        }catch (SQLException ex){
+            ex.printStackTrace();
+            logger.severe("SQL exception while creating instance of MemoryBookService");
         }
         return instance;
     }
@@ -68,5 +78,98 @@ public class MemoryBookService {
         return books;
     }
 
+    public Book readBookById(Long id){
+        Book book = null;
+        try {
+            PreparedStatement prepStm = connection.prepareStatement(READ_BOOK_BY_ID);
+            prepStm.setLong(1,id);
+            ResultSet resultSet = prepStm.executeQuery();
+            if (resultSet.next()){
+                book = new Book(
+                        (long) resultSet.getInt(1),
+                        resultSet.getString(2),
+                        resultSet.getString(3),
+                        resultSet.getString(4),
+                        resultSet.getString(5),
+                        resultSet.getString(6)
+                );
+                logger.info("Successfully read book by id");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            logger.severe("SQL exception in readBookById(Integer id) method");
+        }
+        return book;
+    }
 
+
+    public Book updateBook(Book book){
+        try {
+            PreparedStatement prepStm = connection.prepareStatement(UPDATE_BOOK);
+            prepStm.setLong(6,book.getId());
+            prepStm.setString(1, book.getIsbn());
+            prepStm.setString(2, book.getTitle());
+            prepStm.setString(3, book.getAuthor());
+            prepStm.setString(4, book.getPublisher());
+            prepStm.setString(5, book.getType());
+
+            switch (prepStm.executeUpdate()){
+                case 0:
+                    logger.info("Successfully updated");
+                    return book;
+                case 1:
+                    logger.info("Book not updated");
+                    return null;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            logger.severe("SQL exception in updateBook(Book book) method");
+        }
+        return null;
+    }
+
+    public Boolean deleteBook(Long id){
+        try {
+            PreparedStatement prepStm = connection.prepareStatement(DELETE_BOOK);
+            prepStm.setLong(1,id);
+            switch (prepStm.executeUpdate()){
+                case 0:
+                    logger.info("Successfully deleted book");
+                    return true;
+                case 1:
+                    logger.info("Book not deleted");
+                    return false;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            logger.severe("SQL exception in deleteBook(Long id) method");
+        }
+        return false;
+    }
+
+    public Book createBook(Book book){
+        try (Connection connection = DbUtil.getConnection();
+             PreparedStatement prepStm = connection.prepareStatement
+                     (CREATE_BOOK, PreparedStatement.RETURN_GENERATED_KEYS)) {
+            try {
+                prepStm.executeUpdate();
+            } catch (MySQLIntegrityConstraintViolationException e) {
+                e.printStackTrace();
+            }
+            try (ResultSet generatedKeys = prepStm.getGeneratedKeys()) {
+                if (generatedKeys.first()) {
+                    book.setId(Long.parseLong(generatedKeys.getInt(1) + ""));
+                    logger.info("Successfully inserted book");
+                    return book;
+                } else {
+                    logger.severe("Generated key was not found");
+                    throw new RuntimeException("Generated key was not found");
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            logger.severe("SQL exception in createBook(Book book) method");
+        }
+        return null;
+    }
 }

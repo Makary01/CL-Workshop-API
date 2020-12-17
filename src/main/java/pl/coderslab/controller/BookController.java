@@ -1,7 +1,6 @@
 package pl.coderslab.controller;
 
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import pl.coderslab.model.Book;
 
 import java.io.IOException;
@@ -12,12 +11,24 @@ import java.util.List;
 @RequestMapping("/books")
 public class BookController {
 
+    private MemoryBookService mBS = MemoryBookService.getMemoryBookService();
+
     @RequestMapping("/helloBook")
     public Book helloBook() throws IOException, SQLException {
-        MemoryBookService mBS = MemoryBookService.getMemoryBookService();
-        List<Book> books = mBS.readAllBooks();
-        return books.get(0);
+
+        return mBS.readBookById(2L);
     }
+
+    @GetMapping(value = "")
+    public List<Book> books(){
+        return mBS.readAllBooks();
+    }
+
+    @GetMapping(value = "/{id}")
+    public Book book(@PathVariable("id") long id){
+        return mBS.readBookById(id);
+    }
+
 
 
 }
