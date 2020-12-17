@@ -25,11 +25,10 @@ public class MemoryBookService {
     private static final String READ_ALL_BOOKS = "SELECT * FROM books ;";
     private static final String READ_BOOK_BY_ID = "SELECT * FROM books WHERE id = ? ;";
     private static final String UPDATE_BOOK = "UPDATE books SET isbn = ?, title = ?, author = ?, publisher = ?, type = ? WHERE id = ?";
-    private static final String DELETE_BOOK = "DELETE FROM books WHERE id=? ;";
+    private static final String DELETE_BOOK = "DELETE FROM books WHERE id = ? ;";
 
 
     private MemoryBookService(){
-
     }
 
     public static MemoryBookService getMemoryBookService(){
@@ -102,22 +101,17 @@ public class MemoryBookService {
         return book;
     }
 
-
     public Book updateBook(Book book){
         try {
             PreparedStatement prepStm = connection.prepareStatement(UPDATE_BOOK);
+            setPrepStmParams(prepStm,book);
             prepStm.setLong(6,book.getId());
-            prepStm.setString(1, book.getIsbn());
-            prepStm.setString(2, book.getTitle());
-            prepStm.setString(3, book.getAuthor());
-            prepStm.setString(4, book.getPublisher());
-            prepStm.setString(5, book.getType());
 
             switch (prepStm.executeUpdate()){
-                case 0:
+                case 1:
                     logger.info("Successfully updated");
                     return book;
-                case 1:
+                case 0:
                     logger.info("Book not updated");
                     return null;
             }
@@ -128,29 +122,31 @@ public class MemoryBookService {
         return null;
     }
 
-    public Boolean deleteBook(Long id){
+    public Book deleteBook(Long id){
+        Book book = readBookById(id);
         try {
             PreparedStatement prepStm = connection.prepareStatement(DELETE_BOOK);
             prepStm.setLong(1,id);
             switch (prepStm.executeUpdate()){
-                case 0:
-                    logger.info("Successfully deleted book");
-                    return true;
                 case 1:
+                    logger.info("Successfully deleted book");
+                    return book;
+                case 0:
                     logger.info("Book not deleted");
-                    return false;
+                    return null;
             }
         } catch (SQLException e) {
             e.printStackTrace();
             logger.severe("SQL exception in deleteBook(Long id) method");
         }
-        return false;
+        return null;
     }
 
     public Book createBook(Book book){
         try (Connection connection = DbUtil.getConnection();
              PreparedStatement prepStm = connection.prepareStatement
-                     (CREATE_BOOK, PreparedStatement.RETURN_GENERATED_KEYS)) {
+                     (CREATE_BOOK, PreparedStatement.RETURN_GENERATED_KEYS);){
+            setPrepStmParams(prepStm,book);
             try {
                 prepStm.executeUpdate();
             } catch (MySQLIntegrityConstraintViolationException e) {
@@ -171,5 +167,13 @@ public class MemoryBookService {
             logger.severe("SQL exception in createBook(Book book) method");
         }
         return null;
+    }
+
+    private void setPrepStmParams(PreparedStatement prepStm, Book book) throws SQLException {
+        prepStm.setString(1, book.getIsbn());
+        prepStm.setString(2, book.getTitle());
+        prepStm.setString(3, book.getAuthor());
+        prepStm.setString(4, book.getPublisher());
+        prepStm.setString(5, book.getType());
     }
 }
